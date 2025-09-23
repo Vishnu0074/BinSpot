@@ -15,7 +15,7 @@ class AddBinScreen extends StatefulWidget {
 }
 
 class _AddBinScreenState extends State<AddBinScreen> {
-  String _type = 'general';
+  String _type = 'bio';
   bool _submitting = false;
 
   void _submit() async {
@@ -44,28 +44,43 @@ class _AddBinScreenState extends State<AddBinScreen> {
       appBar: AppBar(
         title: Text('Add Bin'),
       ),
-      body: Padding(
-        padding: EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Text('Location: ${widget.initialLatLng.latitude.toStringAsFixed(6)}, ${widget.initialLatLng.longitude.toStringAsFixed(6)}'),
+      body: Container(
+        color: Color(0xFFF5F5DC), // Light cream background
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Column(
+            children: [
+            Text(
+              'Location: ${widget.initialLatLng.latitude.toStringAsFixed(6)}, ${widget.initialLatLng.longitude.toStringAsFixed(6)}',
+              style: TextStyle(color: Colors.black, fontSize: 16),
+            ),
             SizedBox(height: 12),
             DropdownButtonFormField<String>(
               value: _type,
               items: [
-                DropdownMenuItem(value: 'general', child: Text('General')),
-                DropdownMenuItem(value: 'recycling', child: Text('Recycling')),
-                DropdownMenuItem(value: 'compost', child: Text('Compost')),
+                DropdownMenuItem(value: 'bio', child: Text('Bio')),
+                DropdownMenuItem(value: 'plastic', child: Text('Plastic')),
+                DropdownMenuItem(value: 'both', child: Text('Both (Bio + Plastic)')),
               ],
-              onChanged: (v) { setState(() { _type = v ?? 'general'; }); },
-              decoration: InputDecoration(labelText: 'Bin Type'),
+              onChanged: (v) { setState(() { _type = v ?? 'bio'; }); },
+              decoration: InputDecoration(
+                labelText: 'Bin Type',
+                labelStyle: TextStyle(color: Colors.black),
+                border: OutlineInputBorder(
+                  borderSide: BorderSide(color: Colors.green),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: Colors.green, width: 2),
+                ),
+              ),
             ),
             Spacer(),
             ElevatedButton(
               onPressed: _submitting ? null : _submit,
               child: _submitting ? CircularProgressIndicator() : Text('Add Bin'),
             )
-          ],
+            ],
+          ),
         ),
       ),
     );

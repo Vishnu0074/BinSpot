@@ -26,7 +26,7 @@ class BinPoint {
       lat: (d['lat'] ?? 0.0) * 1.0,
       lng: (d['lng'] ?? 0.0) * 1.0,
       addedBy: d['addedBy'] ?? 'unknown',
-      type: d['type'] ?? 'general',
+      type: d['type'] ?? 'bio',
       upvotes: (d['upvotes'] ?? 0) as int,
       createdAt: d['createdAt'] ?? Timestamp.now(),
     );

@@ -34,26 +34,62 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('BinSpot — Login')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            TextField(controller: _email, decoration: InputDecoration(labelText: 'Email')),
-            SizedBox(height: 8),
-            TextField(controller: _password, decoration: InputDecoration(labelText: 'Password'), obscureText: true),
-            SizedBox(height: 16),
-            if (_error != null) Text(_error!, style: TextStyle(color: Colors.red)),
+      body: Container(
+        color: Color(0xFFF5F5DC), // Light cream background
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              TextField(
+                controller: _email,
+                decoration: InputDecoration(
+                  labelText: 'Email',
+                  labelStyle: TextStyle(color: Colors.black),
+                  border: OutlineInputBorder(
+                    borderSide: BorderSide(color: Colors.green),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: Colors.green, width: 2),
+                  ),
+                ),
+                style: TextStyle(color: Colors.black),
+              ),
+              SizedBox(height: 16),
+              TextField(
+                controller: _password,
+                decoration: InputDecoration(
+                  labelText: 'Password',
+                  labelStyle: TextStyle(color: Colors.black),
+                  border: OutlineInputBorder(
+                    borderSide: BorderSide(color: Colors.green),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: Colors.green, width: 2),
+                  ),
+                ),
+                obscureText: true,
+                style: TextStyle(color: Colors.black),
+              ),
+              SizedBox(height: 24),
+              if (_error != null) 
+                Padding(
+                  padding: EdgeInsets.only(bottom: 16),
+                  child: Text(_error!, style: TextStyle(color: Colors.red)),
+                ),
             ElevatedButton(
               onPressed: _loading ? null : _login,
               child: _loading ? CircularProgressIndicator() : Text('Login'),
             ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pushNamed(SignupScreen.routeName);
-              },
-              child: Text('Create an account'),
-            )
-          ],
+              SizedBox(height: 16),
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pushNamed(SignupScreen.routeName);
+                },
+                child: Text('Create an account', style: TextStyle(color: Colors.green)),
+              )
+            ],
+          ),
         ),
       ),
     );
