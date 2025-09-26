@@ -26,6 +26,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   StreamSubscription<Position>? _positionStream;
   Timer? _locationTimer;
   double _currentHeading = 0.0;
+  double _mapRotation = 0.0;
 
   @override
   void initState() {
@@ -172,6 +173,13 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
               initialCenter: _center,
               initialZoom: 13.0,
               onLongPress: _onMapLongPress,
+              onMapEvent: (MapEvent mapEvent) {
+                if (mapEvent is MapEventRotateEnd || mapEvent is MapEventMove) {
+                  setState(() {
+                    _mapRotation = _mapController.camera.rotation;
+                  });
+                }
+              },
             ),
             children: [
               TileLayer(
@@ -202,17 +210,21 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                   ...bins.map((b) {
                   return Marker(
                     width: 40,
-                    height: 40,
+                    height: 50,
                     point: LatLng(b.lat, b.lng),
                     alignment: Alignment.bottomCenter,
+                    rotate: false, // Prevent rotation with map
                       child: GestureDetector(
                         onTap: () {
                           _showBinBottomSheet(context, b);
                         },
-                        child: Icon(
-                          Icons.location_pin,
-                          size: 40,
-                          color: _getBinColor(b.type),
+                        child: Transform.translate(
+                          offset: Offset(0, -5), // Fine-tune anchor point
+                          child: Icon(
+                            Icons.location_pin,
+                            size: 40,
+                            color: _getBinColor(b.type),
+                          ),
                         ),
                     ),
                   );
@@ -509,6 +521,14 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                                       }
                                     },
                                   ),
+                                  // Show delete button only if current user added the bin
+                                  if (bin.addedBy == Provider.of<AuthProvider>(context, listen: false).uid)
+                                    IconButton(
+                                      icon: Icon(Icons.delete_outline, color: Colors.red),
+                                      onPressed: () {
+                                        _showDeleteConfirmation(context, bin, binProvider);
+                                      },
+                                    ),
                                 ],
                               ),
                               onTap: () {
@@ -522,6 +542,49 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
               ),
             ],
           ),
+        );
+      },
+    );
+  }
+
+  void _showDeleteConfirmation(BuildContext context, BinPoint bin, BinProvider binProvider) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Delete Bin'),
+          content: Text('Are you sure you want to delete this ${bin.type} bin? This action cannot be undone.'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // Close dialog
+              },
+              child: Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.of(context).pop(); // Close dialog
+                Navigator.of(context).pop(); // Close bottom sheet
+                try {
+                  await binProvider.deleteBin(bin.id);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Bin deleted successfully'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error deleting bin: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              },
+              child: Text('Delete', style: TextStyle(color: Colors.red)),
+            ),
+          ],
         );
       },
     );

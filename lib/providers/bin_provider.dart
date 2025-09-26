@@ -85,6 +85,16 @@ class BinProvider extends ChangeNotifier {
     await doc.update({'upvotes': FieldValue.increment(1)});
   }
 
+  Future<void> deleteBin(String id) async {
+    try {
+      await binsRef.doc(id).delete();
+      print('Bin deleted successfully: $id');
+    } catch (e) {
+      print('Error deleting bin: $e');
+      rethrow;
+    }
+  }
+
   /// Get bins sorted by distance from current location
   List<BinPoint> getNearbyBinsSorted() {
     if (_currentLocation == null) return _allBins;

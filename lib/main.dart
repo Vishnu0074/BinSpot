@@ -4,6 +4,8 @@ import 'package:binspot_app/providers/bin_provider.dart';
 import 'package:binspot_app/screen/home_map.dart';
 import 'package:binspot_app/screen/login_screen.dart';
 import 'package:binspot_app/screen/signup_screen.dart';
+import 'package:binspot_app/screen/splash_screen.dart';
+import 'package:binspot_app/screen/onboarding_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -17,7 +19,7 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  
+
   // Enable Firestore offline persistence
   FirebaseFirestore.instance.settings = const Settings(
     persistenceEnabled: true,
@@ -36,6 +38,7 @@ class BinSpotApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => BinProvider()),
       ],
       child: MaterialApp(
+        debugShowCheckedModeBanner: false,
         title: 'BinSpot',
         theme: ThemeData(
           brightness: Brightness.light,
@@ -71,31 +74,15 @@ class BinSpotApp extends StatelessWidget {
           ),
           useMaterial3: true,
         ),
-        home: EntryPoint(),
+        home: SplashScreen(),
         routes: {
+          '/onboarding': (_) => OnboardingScreen(),
           SignupScreen.routeName: (_) => SignupScreen(),
           LoginScreen.routeName: (_) => LoginScreen(),
-          HomeMapScreen.routeName: (_) =>
-              HomeMapScreen(),
+          HomeMapScreen.routeName: (_) => HomeMapScreen(),
         },
       ),
     );
   }
 }
 
-class EntryPoint extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final auth = Provider.of<AuthProvider>(context);
-    return FutureBuilder(
-      future: auth.tryAutoLogin(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Scaffold(body: Center(child: CircularProgressIndicator()));
-        } else {
-          return auth.isAuthenticated ? HomeMapScreen() : LoginScreen();
-        }
-      },
-    );
-  }
-}
