@@ -1,14 +1,18 @@
 import os
 from pathlib import Path
+import urllib.parse
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DEBUG = os.environ.get("DJANGO_DEBUG", "false").lower() in {"1", "true", "yes"}
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-only-change-me")
 if not DEBUG and SECRET_KEY == "dev-only-change-me":
     raise RuntimeError("Set DJANGO_SECRET_KEY to a strong secret before running with DJANGO_DEBUG=false.")
-ALLOWED_HOSTS = [host.strip() for host in os.environ.get(
-    "DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,10.0.2.2"
-).split(",") if host.strip()]
+
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,10.0.2.2").split(",")
+    if host.strip()
+]
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -49,10 +53,8 @@ TEMPLATES = [{
 WSGI_APPLICATION = "binspot_backend.wsgi.application"
 ASGI_APPLICATION = "binspot_backend.asgi.application"
 
-# Supports DATABASE_URL for hosted Postgres; SQLite remains convenient locally.
 DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
 if DATABASE_URL.startswith(("postgres://", "postgresql://")):
-    import urllib.parse
     parsed = urllib.parse.urlparse(DATABASE_URL)
     DATABASES = {"default": {
         "ENGINE": "django.db.backends.postgresql",
@@ -85,7 +87,8 @@ STORAGES = {
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 CORS_ALLOWED_ORIGINS = [
-    origin.strip() for origin in os.environ.get("DJANGO_CORS_ALLOWED_ORIGINS", "").split(",")
+    origin.strip()
+    for origin in os.environ.get("DJANGO_CORS_ALLOWED_ORIGINS", "").split(",")
     if origin.strip()
 ]
 CORS_ALLOW_ALL_ORIGINS = DEBUG and not CORS_ALLOWED_ORIGINS
