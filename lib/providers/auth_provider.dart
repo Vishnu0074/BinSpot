@@ -1,45 +1,76 @@
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+
+import '../services/api_client.dart';
 
 class AuthProvider extends ChangeNotifier {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  User? user;
+  final ApiClient _api = ApiClient.instance;
 
-  bool get isAuthenticated => user != null;
+  String? _token;
+  String? _userId;
+  String? _email;
+  bool _initialized = false;
+
+  bool get isAuthenticated => _token != null && _token!.isNotEmpty;
+  bool get initialized => _initialized;
+  String get uid => _userId ?? '';
+  String get email => _email ?? '';
 
   AuthProvider() {
-    user = _auth.currentUser;
-    _auth.authStateChanges().listen((u) {
-      user = u;
-      notifyListeners();
-    });
+    _restoreSession();
   }
 
-  Future<void> signup(String email, String password) async {
-    final cred = await _auth.createUserWithEmailAndPassword(
-      email: email,
-      password: password,
-    );
-    user = cred.user;
+  Future<void> _restoreSession() async {
+    _token = await _api.token;
+    if (_token != null && _token!.isNotEmpty) {
+      try {
+        final profile = await _api.get('/auth/me/');
+        _userId = profile['id']?.toString();
+        _email = profile['email']?.toString();
+      } catch (_) {
+        await _api.clearToken();
+        _token = null;
+      }
+    }
+    _initialized = true;
     notifyListeners();
   }
 
+  Future<void> signup(String email, String password) async {
+    final result = await _api.post('/auth/register/', authenticated: false,
+        body: {'email': email.trim(), 'password': password});
+    await _acceptAuthResult(result);
+  }
+
   Future<void> login(String email, String password) async {
-    final cred = await _auth.signInWithEmailAndPassword(email: email, password: password);
-    user = cred.user;
+    final result = await _api.post('/auth/login/', authenticated: false,
+        body: {'email': email.trim(), 'password': password});
+    await _acceptAuthResult(result);
+  }
+
+  Future<void> _acceptAuthResult(Map<String, dynamic> result) async {
+    final value = result['token']?.toString();
+    if (value == null || value.isEmpty) {
+      throw ApiException('The API response did not include an authentication token.');
+    }
+    _token = value;
+    final user = result['user'];
+    _userId = result['id']?.toString() ?? (user is Map ? user['id']?.toString() : null);
+    _email = result['email']?.toString() ?? (user is Map ? user['email']?.toString() : null);
+    await _api.saveToken(value);
     notifyListeners();
   }
 
   Future<void> logout() async {
-    await _auth.signOut();
-    user = null;
-    notifyListeners();
+    try {
+      await _api.post('/auth/logout/');
+    } finally {
+      await _api.clearToken();
+      _token = null;
+      _userId = null;
+      _email = null;
+      notifyListeners();
+    }
   }
 
-  Future<void> tryAutoLogin() async {
-    user = _auth.currentUser;
-    return;
-  }
-
-  String get uid => user?.uid ?? 'anonymous';
+  Future<void> tryAutoLogin() => _restoreSession();
 }
