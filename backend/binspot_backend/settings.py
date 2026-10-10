@@ -1,11 +1,15 @@
 import os
-from pathlib import Path
 import urllib.parse
+from pathlib import Path
+
+from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-DEBUG = os.environ.get("DJANGO_DEBUG", "false").lower() in {"1", "true", "yes"}
+load_dotenv(BASE_DIR / ".env")
+
+DEBUG = os.environ.get("DJANGO_DEBUG", "true").lower() in {"1", "true", "yes"}
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-only-change-me")
-if not DEBUG and SECRET_KEY == "dev-only-change-me":
+if not DEBUG and SECRET_KEY in {"dev-only-change-me", "replace-me", "dev-local-only-change-this"}:
     raise RuntimeError("Set DJANGO_SECRET_KEY to a strong secret before running with DJANGO_DEBUG=false.")
 
 ALLOWED_HOSTS = [
