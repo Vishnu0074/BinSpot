@@ -1,34 +1,56 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/material.dart';
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../models/bin_point.dart';
+import '../services/api_client.dart';
 import '../utils/location_utils.dart';
 
 class BinProvider extends ChangeNotifier {
-  final CollectionReference binsRef = FirebaseFirestore.instance.collection('bins');
+  final ApiClient _api = ApiClient.instance;
   List<BinPoint> _bins = [];
   List<BinPoint> _allBins = [];
   LatLng? _currentLocation;
-  static const double _searchRadiusMeters = 5000.0; // 5km radius
+  String? _lastError;
+  Timer? _refreshTimer;
+  bool _loading = false;
+  static const double _searchRadiusMeters = 5000;
 
-  List<BinPoint> get bins => _bins;
-  List<BinPoint> get allBins => _allBins;
+  List<BinPoint> get bins => List.unmodifiable(_bins);
+  List<BinPoint> get allBins => List.unmodifiable(_allBins);
+  String? get lastError => _lastError;
+  bool get loading => _loading;
 
   BinProvider() {
-    _listenBins();
+    refresh();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) => refresh());
   }
 
-  void _listenBins() {
-    binsRef.snapshots().listen((snapshot) {
-      print('Firestore snapshot received: ${snapshot.docs.length} bins');
-      _allBins = snapshot.docs.map((d) => BinPoint.fromDoc(d)).toList();
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> refresh() async {
+    if (_loading) return;
+    _loading = true;
+    try {
+      final response = await _api.get('/bins/');
+      final list = response['results'] ?? response['data'] ?? [];
+      if (list is List) {
+        _allBins = list.whereType<Map>()
+            .map((item) => BinPoint.fromMap(Map<String, dynamic>.from(item))).toList();
+      }
+      _lastError = null;
       _filterBinsByLocation();
-      print('Loaded ${_allBins.length} total bins, ${_bins.length} within range');
+    } catch (error) {
+      _lastError = error.toString();
+    } finally {
+      _loading = false;
       notifyListeners();
-    }, onError: (error) {
-      print('Error listening to bins: $error');
-    });
+    }
   }
 
   void updateCurrentLocation(LatLng location) {
@@ -39,90 +61,48 @@ class BinProvider extends ChangeNotifier {
 
   void _filterBinsByLocation() {
     if (_currentLocation == null) {
-      _bins = _allBins; // Show all bins if no current location
+      _bins = List.of(_allBins);
       return;
     }
-
-    // Show all bins within radius, but if none are found, still show all bins
-    final filteredBins = _allBins.where((bin) {
-      final binLocation = LatLng(bin.lat, bin.lng);
-      return LocationUtils.isWithinRadius(
-        _currentLocation!,
-        binLocation,
-        _searchRadiusMeters,
-      );
-    }).toList();
-    
-    _bins = filteredBins.isNotEmpty ? filteredBins : _allBins;
+    final nearby = _allBins.where((bin) => LocationUtils.isWithinRadius(
+      _currentLocation!, LatLng(bin.lat, bin.lng), _searchRadiusMeters,
+    )).toList();
+    _bins = nearby.isNotEmpty ? nearby : List.of(_allBins);
   }
 
-  Future<void> addBin({
-    required double lat,
-    required double lng,
-    required String addedBy,
-    String type = 'bio',
-  }) async {
-    try {
-      final doc = {
-        'lat': lat,
-        'lng': lng,
-        'addedBy': addedBy,
-        'type': type,
-        'upvotes': 0,
-        'createdAt': FieldValue.serverTimestamp(),
-      };
-      print('Adding bin: $doc');
-      final docRef = await binsRef.add(doc);
-      print('Bin added successfully with ID: ${docRef.id}');
-    } catch (e) {
-      print('Error adding bin: $e');
-      rethrow;
-    }
+  Future<void> addBin({required double lat, required double lng,
+      required String addedBy, String type = 'bio'}) async {
+    await _api.post('/bins/', body: {
+      'latitude': lat, 'longitude': lng, 'description': type,
+      'type': type, 'added_by': addedBy,
+    });
+    await refresh();
   }
 
   Future<void> upvote(String id) async {
-    final doc = binsRef.doc(id);
-    await doc.update({'upvotes': FieldValue.increment(1)});
+    await _api.post('/bins/$id/upvote/');
+    await refresh();
   }
 
   Future<void> deleteBin(String id) async {
-    try {
-      await binsRef.doc(id).delete();
-      print('Bin deleted successfully: $id');
-    } catch (e) {
-      print('Error deleting bin: $e');
-      rethrow;
-    }
+    await _api.delete('/bins/$id/');
+    await refresh();
   }
 
-  /// Get bins sorted by distance from current location
   List<BinPoint> getNearbyBinsSorted() {
-    if (_currentLocation == null) return _allBins;
-    
-    final binsWithDistance = _allBins.map((bin) {
-      final distance = LocationUtils.calculateDistance(
-        _currentLocation!,
-        LatLng(bin.lat, bin.lng),
-      );
-      return {'bin': bin, 'distance': distance};
-    }).toList();
-    
-    // Sort by distance
-    binsWithDistance.sort((a, b) => (a['distance'] as double).compareTo(b['distance'] as double));
-    
-    // Return only bins within reasonable range (10km)
-    return binsWithDistance
-        .where((item) => (item['distance'] as double) <= 10000)
-        .map((item) => item['bin'] as BinPoint)
-        .toList();
+    if (_currentLocation == null) return List.of(_allBins);
+    final sorted = List<BinPoint>.of(_allBins);
+    sorted.sort((a, b) => LocationUtils.calculateDistance(
+      _currentLocation!, LatLng(a.lat, a.lng),
+    ).compareTo(LocationUtils.calculateDistance(
+      _currentLocation!, LatLng(b.lat, b.lng),
+    )));
+    return sorted.where((bin) => LocationUtils.calculateDistance(
+      _currentLocation!, LatLng(bin.lat, bin.lng),
+    ) <= 10000).toList();
   }
-  
-  /// Get distance to a specific bin from current location
-  double? getDistanceToBin(BinPoint bin) {
-    if (_currentLocation == null) return null;
-    return LocationUtils.calculateDistance(
-      _currentLocation!,
-      LatLng(bin.lat, bin.lng),
-    );
-  }
+
+  double? getDistanceToBin(BinPoint bin) => _currentLocation == null
+      ? null
+      : LocationUtils.calculateDistance(_currentLocation!, LatLng(bin.lat, bin.lng));
 }
