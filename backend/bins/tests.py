@@ -29,16 +29,29 @@ class ApiTests(TestCase):
         self.assertEqual(login.status_code, 200)
         self.assertEqual(login.data["email"], "tester@example.com")
 
-    def test_bin_list_and_create(self):
-        response = self.client.post("/api/bins/", {
-            "latitude": 9.2648, "longitude": 76.7758,
-            "type": "plastic", "description": "Community recycling bin",
-        }, format="json")
+    def test_bin_list_and_create_requires_auth(self):
+        payload = {
+            "latitude": 9.2648,
+            "longitude": 76.7758,
+            "type": "plastic",
+            "description": "Community recycling bin",
+        }
+        anonymous = self.client.post("/api/bins/", payload, format="json")
+        self.assertEqual(anonymous.status_code, 401)
+
+        user = User.objects.create_user(
+            username="tester@example.com",
+            email="tester@example.com",
+            password="Strong-password-987!",
+        )
+        self.client.force_authenticate(user=user)
+        response = self.client.post("/api/bins/", payload, format="json")
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data["type"], "plastic")
         listed = self.client.get("/api/bins/")
         self.assertEqual(listed.status_code, 200)
         self.assertEqual(listed.data["count"], 1)
+        self.assertEqual(listed.data["results"][0]["added_by_email"], "tester@example.com")
 
     def test_upvote_increments_counter(self):
         obj = Bin.objects.create(latitude=9.2, longitude=76.8, type="bio")
