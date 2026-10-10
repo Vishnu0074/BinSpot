@@ -73,8 +73,10 @@ class BinProvider extends ChangeNotifier {
   Future<void> addBin({required double lat, required double lng,
       required String addedBy, String type = 'bio'}) async {
     await _api.post('/bins/', body: {
-      'latitude': lat, 'longitude': lng, 'description': type,
-      'type': type, 'added_by': addedBy,
+      'latitude': lat,
+      'longitude': lng,
+      'description': type,
+      'type': type,
     });
     await refresh();
   }
