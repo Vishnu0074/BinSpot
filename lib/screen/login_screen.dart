@@ -1,4 +1,3 @@
-
 import 'package:binspot_app/screen/signup_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -8,373 +7,159 @@ import 'home_map.dart';
 
 class LoginScreen extends StatefulWidget {
   static const routeName = '/login';
+
+  const LoginScreen({super.key});
+
   @override
-  _LoginScreenState createState() => _LoginScreenState();
+  State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin {
+class _LoginScreenState extends State<LoginScreen> {
   final _email = TextEditingController();
   final _password = TextEditingController();
   bool _loading = false;
   String? _error;
-  late AnimationController _animationController;
-  late Animation<double> _fadeAnimation;
-  late Animation<Offset> _slideAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _animationController = AnimationController(
-      duration: Duration(milliseconds: 1200),
-      vsync: this,
-    );
-    
-    _fadeAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeInOut,
-    ));
-    
-    _slideAnimation = Tween<Offset>(
-      begin: Offset(0, 0.3),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeOutCubic,
-    ));
-    
-    _animationController.forward();
-  }
 
   @override
   void dispose() {
-    _animationController.dispose();
     _email.dispose();
     _password.dispose();
     super.dispose();
   }
 
-  void _login() async {
+  Future<void> _login() async {
+    final email = _email.text.trim();
+    if (email.isEmpty || !email.contains('@') || _password.text.isEmpty) {
+      setState(() => _error = 'Enter a valid email address and password.');
+      return;
+    }
     setState(() { _loading = true; _error = null; });
     try {
-      await Provider.of<AuthProvider>(context, listen: false).login(_email.text.trim(), _password.text);
+      await context.read<AuthProvider>().login(email, _password.text);
+      if (!mounted) return;
       Navigator.of(context).pushReplacementNamed(HomeMapScreen.routeName);
-    } catch (e) {
-      setState(() { _error = e.toString(); });
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
     } finally {
-      setState(() { _loading = false; });
+      if (mounted) setState(() => _loading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    const green = Color(0xFF2E7D32);
     return Scaffold(
       body: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Color(0xFFE8F5E8),
-              Color(0xFFF1F8E9),
-              Colors.white,
-            ],
+            colors: [Color(0xFFE8F5E8), Color(0xFFF1F8E9), Colors.white],
           ),
         ),
         child: SafeArea(
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                children: [
-                  SizedBox(height: 40),
-                  
-                  // Welcome Section
-                  FadeTransition(
-                    opacity: _fadeAnimation,
-                    child: Column(
-                      children: [
-                        // Logo
-                        Container(
-                          width: 200,
-                          height: 200,
-                          child: Image.asset("assets/images/binspot.png"),
-                        ),
-
-                        Text(
-                          'Welcome Back',
-                          style: TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                        ),
-                        
-                        SizedBox(height: 8),
-                        
-                        Text(
-                          'Continue your eco-friendly journey',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                        
-                        SizedBox(height: 12),
-                        
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            _buildStatCard('250K+', 'Bins Found'),
-                            SizedBox(width: 20),
-                            _buildStatCard('50K+', 'Users'),
-                          ],
-                        ),
-                      ],
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 460),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: Image.asset('assets/images/binspot.png', width: 160, height: 160),
                     ),
-                  ),
-                  
-                  SizedBox(height: 50),
-                  
-                  // Login Form
-                  SlideTransition(
-                    position: _slideAnimation,
-                    child: FadeTransition(
-                      opacity: _fadeAnimation,
-                      child: Container(
-                        padding: EdgeInsets.all(24),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
-                              blurRadius: 20,
-                              offset: Offset(0, 8),
-                            ),
-                          ],
-                        ),
+                    const SizedBox(height: 12),
+                    const Text('Welcome Back',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold, color: Colors.black87)),
+                    const SizedBox(height: 8),
+                    Text('Sign in to find and share community bins',
+                      textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[700])),
+                    const SizedBox(height: 28),
+                    Card(
+                      color: Colors.white,
+                      elevation: 3,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
                         child: Column(
                           children: [
                             TextField(
                               controller: _email,
                               keyboardType: TextInputType.emailAddress,
-                              decoration: InputDecoration(
-                                labelText: 'Email Address',
-                                prefixIcon: Icon(Icons.email_outlined, color: Color(0xFF4CAF50)),
-                                labelStyle: TextStyle(color: Colors.grey[600]),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(color: Colors.grey[300]!),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(color: Color(0xFF4CAF50), width: 2),
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(color: Colors.grey[300]!),
-                                ),
+                              autocorrect: false,
+                              textInputAction: TextInputAction.next,
+                              decoration: const InputDecoration(
+                                labelText: 'Email address',
+                                prefixIcon: Icon(Icons.email_outlined),
+                                border: OutlineInputBorder(),
                               ),
                             ),
-                            
-                            SizedBox(height: 20),
-                            
+                            const SizedBox(height: 16),
                             TextField(
                               controller: _password,
                               obscureText: true,
-                              decoration: InputDecoration(
+                              onSubmitted: (_) => _loading ? null : _login(),
+                              decoration: const InputDecoration(
                                 labelText: 'Password',
-                                prefixIcon: Icon(Icons.lock_outline, color: Color(0xFF4CAF50)),
-                                labelStyle: TextStyle(color: Colors.grey[600]),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(color: Colors.grey[300]!),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(color: Color(0xFF4CAF50), width: 2),
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(color: Colors.grey[300]!),
-                                ),
+                                prefixIcon: Icon(Icons.lock_outline),
+                                border: OutlineInputBorder(),
                               ),
                             ),
-                            
-                            SizedBox(height: 24),
-                            
-                            if (_error != null)
+                            if (_error != null) ...[
+                              const SizedBox(height: 16),
                               Container(
-                                padding: EdgeInsets.all(12),
-                                margin: EdgeInsets.only(bottom: 16),
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: Colors.red[50],
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: Colors.red[200]!),
+                                  color: Colors.red.shade50,
+                                  borderRadius: BorderRadius.circular(10),
                                 ),
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.error_outline, color: Colors.red[700], size: 20),
-                                    SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        _error!,
-                                        style: TextStyle(color: Colors.red[700], fontSize: 14),
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                                child: Text(_error!, style: TextStyle(color: Colors.red.shade800)),
                               ),
-                            
+                            ],
+                            const SizedBox(height: 20),
                             SizedBox(
                               width: double.infinity,
-                              height: 56,
+                              height: 52,
                               child: ElevatedButton(
                                 onPressed: _loading ? null : _login,
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: Color(0xFF4CAF50),
+                                  backgroundColor: green,
                                   foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  elevation: 2,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                 ),
                                 child: _loading
-                                    ? SizedBox(
-                                        width: 24,
-                                        height: 24,
-                                        child: CircularProgressIndicator(
-                                          color: Colors.white,
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : Text(
-                                        'Sign In',
-                                        style: TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
+                                    ? const SizedBox(width: 22, height: 22,
+                                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                    : const Text('Sign In', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                               ),
                             ),
                           ],
                         ),
                       ),
                     ),
-                  ),
-                  
-                  SizedBox(height: 30),
-                  
-                  // Sign up link
-                  FadeTransition(
-                    opacity: _fadeAnimation,
-                    child: Row(
+                    const SizedBox(height: 18),
+                    Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(
-                          "Don't have an account? ",
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontSize: 16,
-                          ),
-                        ),
+                        const Text("Don't have an account?"),
                         TextButton(
-                          onPressed: () {
-                            Navigator.of(context).pushNamed(SignupScreen.routeName);
-                          },
-                          child: Text(
-                            'Join BinSpot',
-                            style: TextStyle(
-                              color: Color(0xFF4CAF50),
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
+                          onPressed: () => Navigator.of(context).pushNamed(SignupScreen.routeName),
+                          child: const Text('Create account', style: TextStyle(color: green)),
                         ),
                       ],
                     ),
-                  ),
-                  
-                  SizedBox(height: 20),
-                  
-                  // Bottom eco message
-                  FadeTransition(
-                    opacity: _fadeAnimation,
-                    child: Container(
-                      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                      decoration: BoxDecoration(
-                        color: Color(0xFF4CAF50).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: Color(0xFF4CAF50).withOpacity(0.3),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.eco,
-                            color: Color(0xFF4CAF50),
-                            size: 24,
-                          ),
-                          SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              'Every bin you find helps create a cleaner, greener world. Join thousands making a difference!',
-                              style: TextStyle(
-                                color: Color(0xFF2E7D32),
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+                    const SizedBox(height: 12),
+                    const Text('A cleaner community starts with one shared location.',
+                      textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF2E7D32))),
+                  ],
+                ),
               ),
             ),
           ),
         ),
-      ),
-    );
-  }
-  
-  Widget _buildStatCard(String number, String label) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Text(
-            number,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF4CAF50),
-            ),
-          ),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey[600],
-            ),
-          ),
-        ],
       ),
     );
   }
