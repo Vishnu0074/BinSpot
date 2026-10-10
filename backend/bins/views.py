@@ -82,10 +82,14 @@ class LogoutView(APIView):
 class BinListCreateView(generics.ListCreateAPIView):
     queryset = Bin.objects.select_related("added_by").all()
     serializer_class = BinSerializer
-    permission_classes = [permissions.AllowAny]
+
+    def get_permissions(self):
+        if self.request.method == "GET":
+            return [permissions.AllowAny()]
+        return [permissions.IsAuthenticated()]
 
     def perform_create(self, serializer):
-        serializer.save(added_by=self.request.user if self.request.user.is_authenticated else None)
+        serializer.save(added_by=self.request.user)
 
 
 class BinDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -93,7 +97,7 @@ class BinDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = BinSerializer
 
     def get_permissions(self):
-        if self.request.method in permissions.SAFE_METHODS:
+        if self.request.method == "GET":
             return [permissions.AllowAny()]
         return [permissions.IsAuthenticated()]
 
