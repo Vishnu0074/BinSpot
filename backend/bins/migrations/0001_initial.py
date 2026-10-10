@@ -6,7 +6,11 @@ import django.db.models.deletion
 
 class Migration(migrations.Migration):
     initial = True
-    dependencies = [migrations.swappable_dependency(settings.AUTH_USER_MODEL)]
+
+    dependencies = [
+        migrations.swappable_dependency(settings.AUTH_USER_MODEL),
+    ]
+
     operations = [
         migrations.CreateModel(
             name="Bin",
@@ -24,6 +28,6 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name="bin",
-            index=models.Index(fields=["latitude", "longitude"], name="bins_bin_latitude_long_8a5d2f_idx"),
+            index=models.Index(fields=["latitude", "longitude"], name="bins_lat_lon_idx"),
         ),
     ]
