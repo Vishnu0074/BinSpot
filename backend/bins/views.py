@@ -5,7 +5,7 @@ from django.db.models import F
 from rest_framework import generics, permissions, status
 from rest_framework.authtoken.models import Token
 from rest_framework.authtoken.views import ObtainAuthToken
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -40,10 +40,13 @@ class RegisterView(APIView):
             validate_password(password)
         except DjangoValidationError as exc:
             raise ValidationError({"password": list(exc.messages)})
+
         user = User.objects.create_user(username=email, email=email, password=password)
         token, _ = Token.objects.get_or_create(user=user)
-        return Response({"token": token.key, "id": user.pk, "email": user.email},
-                        status=status.HTTP_201_CREATED)
+        return Response(
+            {"token": token.key, "id": user.pk, "email": user.email},
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class LoginView(ObtainAuthToken):
@@ -98,14 +101,12 @@ class BinDetailView(generics.RetrieveUpdateDestroyAPIView):
         if self.request.user.is_staff or serializer.instance.added_by_id == self.request.user.id:
             serializer.save()
             return
-        from rest_framework.exceptions import PermissionDenied
         raise PermissionDenied("You can only update bins you submitted.")
 
     def perform_destroy(self, instance):
         if self.request.user.is_staff or instance.added_by_id == self.request.user.id:
             instance.delete()
             return
-        from rest_framework.exceptions import PermissionDenied
         raise PermissionDenied("You can only delete bins you submitted.")
 
 
