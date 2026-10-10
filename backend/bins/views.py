@@ -1,8 +1,10 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db.models import F
 from rest_framework import generics, permissions, status
 from rest_framework.authtoken.models import Token
+from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -15,6 +17,7 @@ User = get_user_model()
 
 class HealthView(APIView):
     permission_classes = [permissions.AllowAny]
+    authentication_classes = []
 
     def get(self, request):
         return Response({"status": "ok", "service": "BinSpot API"})
@@ -41,6 +44,21 @@ class RegisterView(APIView):
         token, _ = Token.objects.get_or_create(user=user)
         return Response({"token": token.key, "id": user.pk, "email": user.email},
                         status=status.HTTP_201_CREATED)
+
+
+class LoginView(ObtainAuthToken):
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def post(self, request, *args, **kwargs):
+        data = request.data.copy()
+        email = str(data.get("email", data.get("username", ""))).strip().lower()
+        data["username"] = email
+        serializer = self.serializer_class(data=data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        user = serializer.validated_data["user"]
+        token, _ = Token.objects.get_or_create(user=user)
+        return Response({"token": token.key, "id": user.pk, "email": user.email})
 
 
 class CurrentUserView(APIView):
@@ -80,20 +98,21 @@ class BinDetailView(generics.RetrieveUpdateDestroyAPIView):
         if self.request.user.is_staff or serializer.instance.added_by_id == self.request.user.id:
             serializer.save()
             return
-        raise ValidationError({"detail": "You can only update bins you submitted."})
+        from rest_framework.exceptions import PermissionDenied
+        raise PermissionDenied("You can only update bins you submitted.")
 
     def perform_destroy(self, instance):
         if self.request.user.is_staff or instance.added_by_id == self.request.user.id:
             instance.delete()
             return
-        raise ValidationError({"detail": "You can only delete bins you submitted."})
+        from rest_framework.exceptions import PermissionDenied
+        raise PermissionDenied("You can only delete bins you submitted.")
 
 
 class BinUpvoteView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request, pk):
-        from django.db.models import F
         updated = Bin.objects.filter(pk=pk).update(upvotes=F("upvotes") + 1)
         if not updated:
             return Response({"detail": "Bin not found."}, status=status.HTTP_404_NOT_FOUND)
