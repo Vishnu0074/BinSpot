@@ -522,7 +522,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                                     },
                                   ),
                                   // Show delete button only if current user added the bin
-                                  if (bin.addedBy == Provider.of<AuthProvider>(context, listen: false).uid)
+                                  if (bin.addedBy == Provider.of<AuthProvider>(context, listen: false).email || bin.addedBy == Provider.of<AuthProvider>(context, listen: false).uid)
                                     IconButton(
                                       icon: Icon(Icons.delete_outline, color: Colors.red),
                                       onPressed: () {
