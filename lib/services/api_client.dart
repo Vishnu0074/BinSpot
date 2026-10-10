@@ -69,10 +69,13 @@ class ApiClient {
     switch (method) {
       case 'GET':
         response = await _client.get(uri, headers: headers);
+        break;
       case 'POST':
         response = await _client.post(uri, headers: headers, body: jsonEncode(body ?? {}));
+        break;
       case 'PATCH':
         response = await _client.patch(uri, headers: headers, body: jsonEncode(body ?? {}));
+        break;
       default:
         throw UnsupportedError('HTTP method $method is not supported');
     }
