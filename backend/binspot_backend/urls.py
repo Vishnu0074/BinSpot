@@ -1,8 +1,6 @@
 from django.contrib import admin
 from django.urls import include, path
-from bins.views import (
-    CurrentUserView, HealthView, LoginView, LogoutView, RegisterView,
-)
+from bins.views import CurrentUserView, HealthView, LoginView, LogoutView, RegisterView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
