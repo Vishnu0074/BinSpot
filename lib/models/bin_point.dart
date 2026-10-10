@@ -1,15 +1,13 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class BinPoint {
   final String id;
   final double lat;
   final double lng;
   final String addedBy;
-  final String type; // general/recycle/compost etc.
+  final String type;
   final int upvotes;
-  final Timestamp createdAt;
+  final DateTime createdAt;
 
-  BinPoint({
+  const BinPoint({
     required this.id,
     required this.lat,
     required this.lng,
@@ -19,27 +17,28 @@ class BinPoint {
     required this.createdAt,
   });
 
-  factory BinPoint.fromDoc(DocumentSnapshot doc) {
-    final d = doc.data() as Map<String, dynamic>;
+  factory BinPoint.fromMap(Map<String, dynamic> data) {
+    final latitude = data['latitude'] ?? data['lat'] ?? 0;
+    final longitude = data['longitude'] ?? data['lng'] ?? 0;
+    final description = data['description']?.toString();
+    final type = data['type']?.toString() ?? description ?? 'bio';
     return BinPoint(
-      id: doc.id,
-      lat: (d['lat'] ?? 0.0) * 1.0,
-      lng: (d['lng'] ?? 0.0) * 1.0,
-      addedBy: d['addedBy'] ?? 'unknown',
-      type: d['type'] ?? 'bio',
-      upvotes: (d['upvotes'] ?? 0) as int,
-      createdAt: d['createdAt'] ?? Timestamp.now(),
+      id: data['id']?.toString() ?? '',
+      lat: (latitude as num).toDouble(),
+      lng: (longitude as num).toDouble(),
+      addedBy: data['added_by_email']?.toString() ??
+          data['added_by']?.toString() ??
+          data['addedBy']?.toString() ??
+          'community',
+      type: type,
+      upvotes: (data['upvotes'] as num?)?.toInt() ?? 0,
+      createdAt: DateTime.tryParse(
+            data['timestamp']?.toString() ??
+            data['created_at']?.toString() ??
+            data['createdAt']?.toString() ??
+            '',
+          ) ??
+          DateTime.now(),
     );
-  }
-
-  Map<String, dynamic> toMap() {
-    return {
-      'lat': lat,
-      'lng': lng,
-      'addedBy': addedBy,
-      'type': type,
-      'upvotes': upvotes,
-      'createdAt': createdAt,
-    };
   }
 }
