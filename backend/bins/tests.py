@@ -16,19 +16,36 @@ class ApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["status"], "ok")
 
-    def test_register_and_login_by_email(self):
+    def test_register_with_username_and_login_by_username(self):
         response = self.client.post("/api/auth/register/", {
+            "username": "green_guru",
             "email": "tester@example.com",
             "password": "Strong-password-987!",
         }, format="json")
         self.assertEqual(response.status_code, 201)
         self.assertIn("token", response.data)
+        self.assertEqual(response.data["username"], "green_guru")
         login = self.client.post("/api/auth/login/", {
-            "email": "tester@example.com",
+            "username": "green_guru",
             "password": "Strong-password-987!",
         }, format="json")
         self.assertEqual(login.status_code, 200)
         self.assertEqual(login.data["email"], "tester@example.com")
+        self.assertEqual(login.data["username"], "green_guru")
+
+    def test_registration_rejects_duplicate_username_case_insensitively(self):
+        self.client.post("/api/auth/register/", {
+            "username": "Green_Guru",
+            "email": "one@example.com",
+            "password": "Strong-password-987!",
+        }, format="json")
+        response = self.client.post("/api/auth/register/", {
+            "username": "green_guru",
+            "email": "two@example.com",
+            "password": "Strong-password-987!",
+        }, format="json")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("username", response.data)
 
     def test_bin_creation_defaults_to_public_and_requires_auth(self):
         payload = {
