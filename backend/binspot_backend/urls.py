@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.urls import include, path
-from bins.views import CurrentUserView, HealthView, LoginView, LogoutView, RegisterView
+
+from bins.views import CurrentUserView, HealthView, LoginView, LogoutView, RegisterView, TopContributorsView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -9,5 +10,6 @@ urlpatterns = [
     path("api/auth/login/", LoginView.as_view(), name="login"),
     path("api/auth/logout/", LogoutView.as_view(), name="logout"),
     path("api/auth/me/", CurrentUserView.as_view(), name="current-user"),
+    path("api/contributors/top/", TopContributorsView.as_view(), name="top-contributors"),
     path("api/", include("bins.urls")),
 ]

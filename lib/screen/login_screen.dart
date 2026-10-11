@@ -15,27 +15,27 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _email = TextEditingController();
+  final _username = TextEditingController();
   final _password = TextEditingController();
   bool _loading = false;
   String? _error;
 
   @override
   void dispose() {
-    _email.dispose();
+    _username.dispose();
     _password.dispose();
     super.dispose();
   }
 
   Future<void> _login() async {
-    final email = _email.text.trim();
-    if (email.isEmpty || !email.contains('@') || _password.text.isEmpty) {
-      setState(() => _error = 'Enter a valid email address and password.');
+    final username = _username.text.trim();
+    if (username.isEmpty || _password.text.isEmpty) {
+      setState(() => _error = 'Enter your username and password.');
       return;
     }
     setState(() { _loading = true; _error = null; });
     try {
-      await context.read<AuthProvider>().login(email, _password.text);
+      await context.read<AuthProvider>().login(username, _password.text);
       if (!mounted) return;
       Navigator.of(context).pushReplacementNamed(HomeMapScreen.routeName);
     } catch (error) {
@@ -86,13 +86,12 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: Column(
                           children: [
                             TextField(
-                              controller: _email,
-                              keyboardType: TextInputType.emailAddress,
+                              controller: _username,
                               autocorrect: false,
                               textInputAction: TextInputAction.next,
                               decoration: const InputDecoration(
-                                labelText: 'Email address',
-                                prefixIcon: Icon(Icons.email_outlined),
+                                labelText: 'Username',
+                                prefixIcon: Icon(Icons.person_outline),
                                 border: OutlineInputBorder(),
                               ),
                             ),

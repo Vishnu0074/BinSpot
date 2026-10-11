@@ -8,12 +8,14 @@ class AuthProvider extends ChangeNotifier {
   String? _token;
   String? _userId;
   String? _email;
+  String? _username;
   bool _initialized = false;
 
   bool get isAuthenticated => _token != null && _token!.isNotEmpty;
   bool get initialized => _initialized;
   String get uid => _userId ?? '';
   String get email => _email ?? '';
+  String get username => _username ?? '';
 
   AuthProvider() {
     _restoreSession();
@@ -26,6 +28,7 @@ class AuthProvider extends ChangeNotifier {
         final profile = await _api.get('/auth/me/');
         _userId = profile['id']?.toString();
         _email = profile['email']?.toString();
+        _username = profile['username']?.toString();
       } catch (_) {
         await _api.clearToken();
         _token = null;
@@ -35,15 +38,20 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> signup(String email, String password) async {
-    final result = await _api.post('/auth/register/', authenticated: false,
-        body: {'email': email.trim(), 'password': password});
+  Future<void> signup(String username, String email, String password) async {
+    final result = await _api.post('/auth/register/', authenticated: false, body: {
+      'username': username.trim(),
+      'email': email.trim(),
+      'password': password,
+    });
     await _acceptAuthResult(result);
   }
 
-  Future<void> login(String email, String password) async {
-    final result = await _api.post('/auth/login/', authenticated: false,
-        body: {'email': email.trim(), 'password': password});
+  Future<void> login(String username, String password) async {
+    final result = await _api.post('/auth/login/', authenticated: false, body: {
+      'username': username.trim(),
+      'password': password,
+    });
     await _acceptAuthResult(result);
   }
 
@@ -56,6 +64,7 @@ class AuthProvider extends ChangeNotifier {
     final user = result['user'];
     _userId = result['id']?.toString() ?? (user is Map ? user['id']?.toString() : null);
     _email = result['email']?.toString() ?? (user is Map ? user['email']?.toString() : null);
+    _username = result['username']?.toString() ?? (user is Map ? user['username']?.toString() : null);
     await _api.saveToken(value);
     notifyListeners();
   }
@@ -68,6 +77,7 @@ class AuthProvider extends ChangeNotifier {
       _token = null;
       _userId = null;
       _email = null;
+      _username = null;
       notifyListeners();
     }
   }

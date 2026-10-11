@@ -1,650 +1,477 @@
 import 'dart:async';
-import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
-import 'package:geolocator/geolocator.dart';
 
 import '../models/bin_point.dart';
 import '../providers/auth_provider.dart';
 import '../providers/bin_provider.dart';
 import '../utils/location_utils.dart';
 import 'add_bin_screen.dart';
+import 'contributors_screen.dart';
+import 'login_screen.dart';
 
 class HomeMapScreen extends StatefulWidget {
   static const routeName = '/home';
+
+  const HomeMapScreen({super.key});
+
   @override
-  _HomeMapScreenState createState() => _HomeMapScreenState();
+  State<HomeMapScreen> createState() => _HomeMapScreenState();
 }
 
 class _HomeMapScreenState extends State<HomeMapScreen> {
+  static const _forest = Color(0xFF205C3B);
   final MapController _mapController = MapController();
-  LatLng _center = LatLng(13.0827, 80.2707); // default (Chennai) adjust for dev
+  LatLng _center = const LatLng(9.2648, 76.7758);
   LatLng? _currentLocation;
-  bool _loadingLocation = false;
   StreamSubscription<Position>? _positionStream;
-  Timer? _locationTimer;
-  double _currentHeading = 0.0;
-  double _mapRotation = 0.0;
+  bool _mapReady = false;
 
   @override
   void initState() {
     super.initState();
-    _initializeLocation();
-    _startLocationUpdates();
+    final savedLocation = context.read<BinProvider>().currentLocation;
+    if (savedLocation != null) {
+      _currentLocation = savedLocation;
+      _center = savedLocation;
+    }
+    _watchLocation();
+  }
+
+  void _watchLocation() {
+    _positionStream = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.medium,
+        distanceFilter: 25,
+      ),
+    ).listen((position) {
+      if (!mounted) return;
+      final next = LatLng(position.latitude, position.longitude);
+      setState(() {
+        _currentLocation = next;
+        if (!_mapReady) _center = next;
+      });
+      context.read<BinProvider>().updateCurrentLocation(next);
+    }, onError: (_) {});
   }
 
   @override
   void dispose() {
     _positionStream?.cancel();
-    _locationTimer?.cancel();
     super.dispose();
   }
 
-  void _initializeLocation() async {
-    final pos = await _determinePosition();
-    if (pos != null) {
-      final location = LatLng(pos.latitude, pos.longitude);
-      setState(() {
-        _center = location;
-        _currentLocation = location;
-      });
-      _mapController.move(_center, 15);
-      
-      // Update bin provider with current location
-      if (mounted) {
-        Provider.of<BinProvider>(context, listen: false)
-            .updateCurrentLocation(location);
-      }
+  Color _binColor(BinPoint bin) {
+    if (bin.isRestricted) return const Color(0xFF858C87);
+    switch (bin.type) {
+      case 'plastic':
+        return const Color(0xFF367DB5);
+      case 'both':
+        return const Color(0xFF8A62A8);
+      default:
+        return _forest;
     }
   }
 
-  void _startLocationUpdates() {
-    _locationTimer = Timer.periodic(Duration(seconds: 1), (timer) async {
-      try {
-        final position = await Geolocator.getCurrentPosition(
-          locationSettings: LocationSettings(
-            accuracy: LocationAccuracy.high,
-            distanceFilter: 1, // Update only if moved at least 1 meter
-          ),
-        );
-        
-        final newLocation = LatLng(position.latitude, position.longitude);
-        final heading = position.heading.isNaN ? 0.0 : (position.heading);
-        
-        // Only update if location actually changed significantly
-        if (_currentLocation == null || 
-            LocationUtils.calculateDistance(_currentLocation!, newLocation) > 5) {
-          setState(() {
-            _currentLocation = newLocation;
-            _currentHeading = heading;
-          });
-          
-          // Update bin provider with new location
-          if (mounted) {
-            Provider.of<BinProvider>(context, listen: false)
-                .updateCurrentLocation(newLocation);
-          }
-        } else if (heading != _currentHeading) {
-          setState(() {
-            _currentHeading = heading;
-          });
-        }
-      } catch (e) {
-        print('Error getting location: $e');
-      }
-    });
+  IconData _binIcon(BinPoint bin) {
+    if (bin.isRestricted) return Icons.lock_rounded;
+    switch (bin.type) {
+      case 'plastic':
+        return Icons.recycling_rounded;
+      case 'both':
+        return Icons.delete_sweep_rounded;
+      default:
+        return Icons.eco_rounded;
+    }
   }
 
-  Future<Position?> _determinePosition() async {
-    setState(() { _loadingLocation = true; });
-    bool serviceEnabled;
-    LocationPermission permission;
-
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      setState(() { _loadingLocation = false; });
-      return null;
+  String _accessLabel(BinPoint bin) {
+    switch (bin.accessLevel) {
+      case 'limited': return 'Limited entry';
+      case 'private': return 'Private access';
+      default: return 'Public';
     }
-
-    permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.deniedForever) {
-      setState(() { _loadingLocation = false; });
-      return null;
-    }
-
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        setState(() { _loadingLocation = false; });
-        return null;
-      }
-    }
-
-    final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
-    setState(() { _loadingLocation = false; });
-    return pos;
   }
 
-  void _onMapLongPress(TapPosition tap, LatLng latlng) {
-    // open add bin screen prefilled with latlng
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => AddBinScreen(initialLatLng: latlng)),
+  void _toggleMore() async {
+    final provider = context.read<BinProvider>();
+    await provider.toggleExpandedNearby();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(provider.showingMore
+          ? 'Showing up to 100 bins within 5 km'
+          : 'Showing the 20 closest bins'),
+      behavior: SnackBarBehavior.floating,
+    ));
+  }
+
+  Future<void> _addBin() async {
+    final point = _mapReady ? _mapController.camera.center : (_currentLocation ?? _center);
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => AddBinScreen(initialLatLng: point)),
+    );
+  }
+
+  Future<void> _logout() async {
+    await context.read<AuthProvider>().logout();
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (_) => false,
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final bins = Provider.of<BinProvider>(context).bins;
-    final binProvider = Provider.of<BinProvider>(context);
-    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final provider = context.watch<BinProvider>();
+    final bins = provider.bins;
     return Scaffold(
-      appBar: AppBar(
-        title: Text('BinSpot'),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.my_location),
-            onPressed: () {
-              if (_currentLocation != null) {
-                _mapController.move(_currentLocation!, 16);
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Location not available')),
-                );
-              }
-            },
-          ),
-          IconButton(
-            icon: Icon(Icons.logout),
-            onPressed: () async {
-              await auth.logout();
-              Navigator.of(context).pushReplacementNamed('/');
-            },
-          )
-        ],
-      ),
+      backgroundColor: const Color(0xFFF5F7F1),
       body: Stack(
         children: [
-          // Map
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
               initialCenter: _center,
-              initialZoom: 13.0,
-              onLongPress: _onMapLongPress,
-              onMapEvent: (MapEvent mapEvent) {
-                if (mapEvent is MapEventRotateEnd || mapEvent is MapEventMove) {
-                  setState(() {
-                    _mapRotation = _mapController.camera.rotation;
-                  });
-                }
-              },
+              initialZoom: 14,
+              onMapReady: () => _mapReady = true,
+              onLongPress: (_, __) => _toggleMore(),
             ),
             children: [
               TileLayer(
-                urlTemplate: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-                subdomains: ['a', 'b', 'c'],
-                userAgentPackageName: 'com.example.binspot',
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'com.binspot.app',
               ),
-              MarkerLayer(
-                markers: [
-                  // Current location marker - simple blue dot
-                  if (_currentLocation != null)
-                    Marker(
-                      width: 20,
-                      height: 20,
-                      point: _currentLocation!,
-                      alignment: Alignment.center,
-                      child: Container(
-                        width: 16,
-                        height: 16,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.blue,
-                          border: Border.all(color: Colors.white, width: 2),
-                        ),
+              CircleLayer(circles: [
+                if (_currentLocation != null)
+                  CircleMarker(
+                    point: _currentLocation!,
+                    radius: 24,
+                    useRadiusInMeter: false,
+                    color: _forest.withValues(alpha: 0.12),
+                    borderColor: _forest.withValues(alpha: 0.35),
+                    borderStrokeWidth: 1,
+                  ),
+              ]),
+              MarkerLayer(markers: [
+                if (_currentLocation != null)
+                  Marker(
+                    point: _currentLocation!,
+                    width: 22,
+                    height: 22,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2D8CDE),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 3),
+                        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 6)],
                       ),
                     ),
-                  // Bin markers
-                  ...bins.map((b) {
-                  return Marker(
-                    width: 40,
-                    height: 50,
-                    point: LatLng(b.lat, b.lng),
-                    alignment: Alignment.bottomCenter,
-                    rotate: false, // Prevent rotation with map
-                      child: GestureDetector(
-                        onTap: () {
-                          _showBinBottomSheet(context, b);
-                        },
-                        child: Transform.translate(
-                          offset: Offset(0, -5), // Fine-tune anchor point
-                          child: Icon(
-                            Icons.location_pin,
-                            size: 40,
-                            color: _getBinColor(b.type),
-                          ),
-                        ),
-                    ),
-                  );
-                }).toList(),
-                ],
-              )
+                  ),
+                ...bins.map((bin) => Marker(
+                  point: LatLng(bin.lat, bin.lng),
+                  width: 44,
+                  height: 48,
+                  alignment: Alignment.bottomCenter,
+                  child: GestureDetector(
+                    onTap: () => _showBinDetails(bin),
+                    child: Icon(Icons.location_pin, size: 44, color: _binColor(bin)),
+                  ),
+                )),
+              ]),
             ],
           ),
-          // Compass widget
-          Positioned(
-            top: 16,
-            right: 16,
-            child: _buildCompass(),
-          ),
-          // Bottom sheet handle
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: _buildBottomSheet(binProvider),
-          ),
-        ],
-      ),
-      // Removed floating action button
-    );
-  }
-
-  Color _getBinColor(String binType) {
-    switch (binType.toLowerCase()) {
-      case 'bio':
-        return Colors.green;
-      case 'plastic':
-        return Colors.blue;
-      case 'both':
-        return Colors.purple;
-      default:
-        return Colors.green; // Default to bio/green
-    }
-  }
-
-  IconData _getBinIcon(String binType) {
-    switch (binType.toLowerCase()) {
-      case 'bio':
-        return Icons.delete;
-      case 'plastic':
-        return Icons.recycling;
-      case 'both':
-        return Icons.delete_forever;
-      default:
-        return Icons.delete;
-    }
-  }
-
-  Widget _buildCompass() {
-    return Container(
-      width: 60,
-      height: 60,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black26,
-            blurRadius: 4,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Transform.rotate(
-        angle: _currentHeading * (pi / 180),
-        child: Icon(
-          Icons.navigation,
-          color: Colors.red,
-          size: 30,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBottomSheet(BinProvider binProvider) {
-    final nearbyBins = binProvider.getNearbyBinsSorted();
-    
-    return GestureDetector(
-      onTap: () {
-        _showNearbyBinsBottomSheet(binProvider, nearbyBins);
-      },
-      child: Container(
-        height: 80,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(20),
-            topRight: Radius.circular(20),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black26,
-              blurRadius: 8,
-              offset: Offset(0, -2),
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-            // Handle
-            Container(
-              margin: EdgeInsets.only(top: 8),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[400],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            // Content
-            Expanded(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+              child: Column(
                 children: [
-                  Icon(Icons.delete_outline, color: Colors.green, size: 24),
-                  SizedBox(width: 8),
-                  Text(
-                    '${nearbyBins.length} nearby bins',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.black87,
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: const [BoxShadow(color: Color(0x18000000), blurRadius: 16, offset: Offset(0, 5))],
+                    ),
+                    child: Row(children: [
+                      Container(
+                        width: 42, height: 42,
+                        decoration: BoxDecoration(color: _forest, borderRadius: BorderRadius.circular(13)),
+                        child: const Icon(Icons.eco_rounded, color: Colors.white, size: 26),
+                      ),
+                      const SizedBox(width: 11),
+                      const Expanded(child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('BinSpot', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: Color(0xFF1D3828))),
+                          Text('Cleaner places, together', style: TextStyle(fontSize: 11, color: Color(0xFF68786D))),
+                        ],
+                      )),
+                      IconButton(
+                        tooltip: 'Top contributors',
+                        onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ContributorsScreen())),
+                        icon: const Icon(Icons.emoji_events_outlined, color: _forest),
+                      ),
+                      IconButton(
+                        tooltip: 'Sign out',
+                        onPressed: _logout,
+                        icon: const Icon(Icons.logout_rounded, color: Color(0xFF68786D)),
+                      ),
+                    ]),
+                  ),
+                  const SizedBox(height: 10),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(30)),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(Icons.near_me_rounded, color: _forest, size: 17),
+                        const SizedBox(width: 6),
+                        Text(provider.showingMore ? 'Nearby area · up to 100 bins' : 'Nearby · 20 closest bins',
+                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
+                      ]),
                     ),
                   ),
-                  SizedBox(width: 8),
-                  Icon(Icons.keyboard_arrow_up, color: Colors.grey[600]),
+                  const Spacer(),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Column(children: [
+                      _MapAction(icon: Icons.my_location_rounded, label: 'My location', onTap: () {
+                        final location = _currentLocation;
+                        if (location != null) _mapController.move(location, 16);
+                      }),
+                      const SizedBox(height: 10),
+                      _MapAction(
+                        icon: provider.showingMore ? Icons.filter_alt_off_rounded : Icons.explore_rounded,
+                        label: provider.showingMore ? 'Show 20' : 'Explore more',
+                        onTap: _toggleMore,
+                      ),
+                    ]),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildNearbyCard(provider),
                 ],
               ),
             ),
-          ],
+          ),
+          if (provider.loading)
+            const Positioned(top: 150, right: 18, child: SizedBox(
+              width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: _forest),
+            )),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _addBin,
+        backgroundColor: _forest,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add_location_alt_rounded),
+        label: const Text('Add a bin', style: TextStyle(fontWeight: FontWeight.w700)),
+      ),
+    );
+  }
+
+  Widget _buildNearbyCard(BinProvider provider) {
+    final nearby = provider.getNearbyBinsSorted();
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(24),
+      elevation: 6,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(24),
+        onTap: () => _showNearbyList(provider),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 12, 18, 16),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Container(width: 36, height: 4, decoration: BoxDecoration(color: const Color(0xFFD6DDD7), borderRadius: BorderRadius.circular(4))),
+            const SizedBox(height: 12),
+            Row(children: [
+              const Icon(Icons.radar_rounded, color: _forest, size: 25),
+              const SizedBox(width: 10),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('Bins around you', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF20382A))),
+                Text(provider.lastError != null ? 'Could not refresh bins' : '${nearby.length} shown · within 5 km',
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF68786D))),
+              ])),
+              const Icon(Icons.keyboard_arrow_up_rounded, color: _forest, size: 27),
+            ]),
+            if (nearby.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 54,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: nearby.take(5).length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (context, index) {
+                    final bin = nearby[index];
+                    return ActionChip(
+                      avatar: Icon(_binIcon(bin), color: _binColor(bin), size: 17),
+                      label: Text('${_accessLabel(bin)} · ${_distanceLabel(provider.getDistanceToBin(bin))}'),
+                      onPressed: () => _showBinDetails(bin),
+                      backgroundColor: const Color(0xFFF5F7F1),
+                      side: BorderSide.none,
+                    );
+                  },
+                ),
+              ),
+            ],
+            const SizedBox(height: 7),
+            const Text('Tap to browse · Press and hold the map to reveal more nearby bins',
+                style: TextStyle(fontSize: 11, color: Color(0xFF77847B))),
+          ]),
         ),
       ),
     );
   }
 
-  void _showNearbyBinsBottomSheet(BinProvider binProvider, List<BinPoint> nearbyBins) {
-    showModalBottomSheet(
+  String _distanceLabel(double? meters) {
+    if (meters == null) return 'distance unknown';
+    return meters < 1000 ? '${meters.round()} m' : '${(meters / 1000).toStringAsFixed(1)} km';
+  }
+
+  void _showNearbyList(BinProvider provider) {
+    final bins = provider.getNearbyBinsSorted();
+    showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) {
-        return Container(
-          height: MediaQuery.of(context).size.height * 0.7,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(20),
-              topRight: Radius.circular(20),
+      builder: (sheetContext) => DraggableScrollableSheet(
+        initialChildSize: 0.72,
+        minChildSize: 0.4,
+        maxChildSize: 0.94,
+        expand: false,
+        builder: (context, scrollController) => Container(
+          decoration: const BoxDecoration(color: Color(0xFFF5F7F1), borderRadius: BorderRadius.vertical(top: Radius.circular(26))),
+          child: Column(children: [
+            const SizedBox(height: 10),
+            Container(width: 38, height: 4, decoration: BoxDecoration(color: Colors.grey.shade400, borderRadius: BorderRadius.circular(4))),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 10),
+              child: Row(children: [
+                const Expanded(child: Text('Nearby bins', style: TextStyle(fontSize: 23, fontWeight: FontWeight.w800))),
+                Text('${bins.length} found', style: const TextStyle(color: Color(0xFF68786D))),
+              ]),
             ),
-          ),
-          child: Column(
-            children: [
-              // Handle
-              Container(
-                margin: EdgeInsets.only(top: 8, bottom: 16),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey[400],
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              // Header
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20),
-                child: Row(
-                  children: [
-                    Icon(Icons.delete_outline, color: Colors.green, size: 28),
-                    SizedBox(width: 12),
-                    Text(
-                      'Nearby Bins',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    Spacer(),
-                    Text(
-                      '${nearbyBins.length} found',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(height: 16),
-              // List of bins
-              Expanded(
-                child: nearbyBins.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.search_off, size: 64, color: Colors.grey[400]),
-                            SizedBox(height: 16),
-                            Text(
-                              'No nearby bins found',
-                              style: TextStyle(
-                                fontSize: 18,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                            SizedBox(height: 8),
-                            Text(
-                              'Try expanding your search area',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey[500],
-                              ),
-                            ),
-                          ],
+            Expanded(child: bins.isEmpty
+                ? const Center(child: Text('No bins found in this area yet. Be the first to add one!'))
+                : ListView.builder(
+                    controller: scrollController,
+                    padding: const EdgeInsets.all(16),
+                    itemCount: bins.length,
+                    itemBuilder: (context, index) {
+                      final bin = bins[index];
+                      final color = _binColor(bin);
+                      return Card(
+                        elevation: 0,
+                        margin: const EdgeInsets.only(bottom: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        child: ListTile(
+                          leading: CircleAvatar(backgroundColor: color.withValues(alpha: .13), child: Icon(_binIcon(bin), color: color)),
+                          title: Text(bin.description.isEmpty ? '${bin.type.toUpperCase()} bin' : bin.description,
+                              maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
+                          subtitle: Text('${_accessLabel(bin)} · ${_distanceLabel(provider.getDistanceToBin(bin))}\n${bin.upvotes} community confirmations',
+                              style: TextStyle(color: bin.isRestricted ? const Color(0xFF777F79) : const Color(0xFF68786D))),
+                          isThreeLine: true,
+                          trailing: const Icon(Icons.chevron_right_rounded),
+                          onTap: () {
+                            Navigator.pop(context);
+                            _mapController.move(LatLng(bin.lat, bin.lng), 17);
+                          },
                         ),
-                      )
-                    : ListView.builder(
-                        padding: EdgeInsets.symmetric(horizontal: 20),
-                        itemCount: nearbyBins.length,
-                        itemBuilder: (context, index) {
-                          final bin = nearbyBins[index];
-                          final distance = binProvider.getDistanceToBin(bin);
-                          
-                          return Card(
-                            margin: EdgeInsets.only(bottom: 12),
-                            elevation: 2,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: ListTile(
-                              contentPadding: EdgeInsets.all(16),
-                              leading: CircleAvatar(
-                                backgroundColor: _getBinColor(bin.type).withValues(alpha: 0.2),
-                                child: Icon(
-                                  _getBinIcon(bin.type),
-                                  color: _getBinColor(bin.type),
-                                ),
-                              ),
-                              title: Text(
-                                bin.type.toUpperCase(),
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
-                              ),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  SizedBox(height: 4),
-                                  Text('Added by: ${bin.addedBy}'),
-                                  SizedBox(height: 2),
-                                  Text('Upvotes: ${bin.upvotes}'),
-                                  if (distance != null) ...[
-                                    SizedBox(height: 2),
-                                    Text(
-                                      'Distance: ${distance < 1000 ? 
-                                          '${distance.round()}m' : 
-                                          '${(distance / 1000).toStringAsFixed(1)}km'}',
-                                      style: TextStyle(
-                                        color: Colors.blue[700],
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: Icon(Icons.thumb_up_outlined, color: Colors.green),
-                                    onPressed: () {
-                                      binProvider.upvote(bin.id);
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('Bin upvoted!')),
-                                      );
-                                    },
-                                  ),
-                                  IconButton(
-                                    icon: Icon(Icons.directions, color: Colors.blue),
-                                    onPressed: () async {
-                                      Navigator.pop(context);
-                                      try {
-                                        await LocationUtils.openMapsNavigation(LatLng(bin.lat, bin.lng));
-                                      } catch (e) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(content: Text('Could not open maps: $e')),
-                                        );
-                                      }
-                                    },
-                                  ),
-                                  // Show delete button only if current user added the bin
-                                  if (bin.addedBy == Provider.of<AuthProvider>(context, listen: false).email || bin.addedBy == Provider.of<AuthProvider>(context, listen: false).uid)
-                                    IconButton(
-                                      icon: Icon(Icons.delete_outline, color: Colors.red),
-                                      onPressed: () {
-                                        _showDeleteConfirmation(context, bin, binProvider);
-                                      },
-                                    ),
-                                ],
-                              ),
-                              onTap: () {
-                                Navigator.pop(context);
-                                _mapController.move(LatLng(bin.lat, bin.lng), 16);
-                              },
-                            ),
-                          );
-                        },
-                      ),
-              ),
-            ],
-          ),
-        );
-      },
+                      );
+                    },
+                  )),
+          ]),
+        ),
+      ),
     );
   }
 
-  void _showDeleteConfirmation(BuildContext context, BinPoint bin, BinProvider binProvider) {
-    showDialog(
+  void _showBinDetails(BinPoint bin) {
+    final color = _binColor(bin);
+    final provider = context.read<BinProvider>();
+    showModalBottomSheet<void>(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('Delete Bin'),
-          content: Text('Are you sure you want to delete this ${bin.type} bin? This action cannot be undone.'),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop(); // Close dialog
-              },
-              child: Text('Cancel'),
-            ),
-            TextButton(
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => Container(
+        padding: const EdgeInsets.fromLTRB(22, 12, 22, 26),
+        decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(26))),
+        child: SafeArea(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Center(child: Container(width: 38, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(4)))),
+          const SizedBox(height: 18),
+          Row(children: [
+            CircleAvatar(radius: 25, backgroundColor: color.withValues(alpha: .14), child: Icon(_binIcon(bin), color: color, size: 28)),
+            const SizedBox(width: 12),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(bin.description.isEmpty ? '${bin.type.toUpperCase()} bin' : bin.description, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 3),
+              Text(_accessLabel(bin), style: TextStyle(color: bin.isRestricted ? const Color(0xFF777F79) : _forest, fontWeight: FontWeight.w600)),
+            ])),
+          ]),
+          const SizedBox(height: 12),
+          Text('Added by ${bin.addedBy} · ${_distanceLabel(provider.getDistanceToBin(bin))}', style: const TextStyle(color: Color(0xFF68786D))),
+          const SizedBox(height: 6),
+          Text('${bin.upvotes} community confirmations', style: const TextStyle(color: Color(0xFF68786D))),
+          const SizedBox(height: 18),
+          Row(children: [
+            Expanded(child: OutlinedButton.icon(
               onPressed: () async {
-                Navigator.of(context).pop(); // Close dialog
-                Navigator.of(context).pop(); // Close bottom sheet
+                Navigator.pop(sheetContext);
                 try {
-                  await binProvider.deleteBin(bin.id);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Bin deleted successfully'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Error deleting bin: $e'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
+                  await LocationUtils.openMapsNavigation(LatLng(bin.lat, bin.lng));
+                } catch (_) {
+                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open your maps app.')));
                 }
               },
-              child: Text('Delete', style: TextStyle(color: Colors.red)),
-            ),
-          ],
-        );
-      },
+              icon: const Icon(Icons.directions_rounded), label: const Text('Directions'),
+            )),
+            const SizedBox(width: 10),
+            Expanded(child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(backgroundColor: _forest, foregroundColor: Colors.white),
+              onPressed: () async {
+                Navigator.pop(sheetContext);
+                try {
+                  await provider.upvote(bin.id);
+                } catch (error) {
+                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not confirm bin: $error')));
+                }
+              },
+              icon: const Icon(Icons.verified_outlined), label: const Text('Confirm bin'),
+            )),
+          ]),
+        ])),
+      ),
     );
   }
+}
 
-  void _showBinBottomSheet(BuildContext ctx, BinPoint b) {
-    final binProv = Provider.of<BinProvider>(ctx, listen: false);
-    showModalBottomSheet(
-      context: ctx,
-      builder: (_) {
-        return Container(
-          padding: EdgeInsets.all(16),
-          height: 220,
-          decoration: BoxDecoration(
-            color: Color(0xFFF5F5DC), // Light cream background
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Bin — ${b.type}',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black),
-              ),
-              SizedBox(height: 8),
-              Text('Added by: ${b.addedBy}', style: TextStyle(color: Colors.black)),
-              SizedBox(height: 8),
-              Text('Upvotes: ${b.upvotes}', style: TextStyle(color: Colors.black)),
-              Spacer(),
-              Row(
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      binProv.upvote(b.id);
-                      Navigator.of(ctx).pop();
-                    },
-                    icon: Icon(Icons.thumb_up),
-                    label: Text('Verify / Upvote'),
-                  ),
-                  SizedBox(width: 12),
-                  ElevatedButton.icon(
-                    onPressed: () async {
-                      Navigator.of(ctx).pop();
-                      try {
-                        await LocationUtils.openMapsNavigation(LatLng(b.lat, b.lng));
-                      } catch (e) {
-                        ScaffoldMessenger.of(ctx).showSnackBar(
-                          SnackBar(content: Text('Could not open maps: $e')),
-                        );
-                      }
-                    },
-                    icon: Icon(Icons.directions),
-                    label: Text('Navigate'),
-                  )
-                ],
-              )
-            ],
-          ),
-        );
-      },
-    );
-  }
+class _MapAction extends StatelessWidget {
+  const _MapAction({required this.icon, required this.label, required this.onTap});
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(17),
+    elevation: 4,
+    child: InkWell(
+      borderRadius: BorderRadius.circular(17),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, color: const Color(0xFF205C3B), size: 23),
+          const SizedBox(height: 4),
+          Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600)),
+        ]),
+      ),
+    ),
+  );
 }
