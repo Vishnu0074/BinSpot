@@ -67,7 +67,7 @@ class LoginView(ObtainAuthToken):
 
     def post(self, request, *args, **kwargs):
         data = request.data.copy()
-        data["username"] = str(data.get("username", "")).strip()
+        data["username"] = str(data.get("username", "")).strip().lower()
         serializer = self.serializer_class(data=data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         user = serializer.validated_data["user"]
