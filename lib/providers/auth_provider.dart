@@ -7,13 +7,13 @@ class AuthProvider extends ChangeNotifier {
 
   String? _token;
   String? _userId;
-  String? _email;
+  String? _email;\n  String? _username;
   bool _initialized = false;
 
   bool get isAuthenticated => _token != null && _token!.isNotEmpty;
   bool get initialized => _initialized;
   String get uid => _userId ?? '';
-  String get email => _email ?? '';
+  String get email => _email ?? '';\n  String get username => _username ?? '';
 
   AuthProvider() {
     _restoreSession();
@@ -25,7 +25,7 @@ class AuthProvider extends ChangeNotifier {
       try {
         final profile = await _api.get('/auth/me/');
         _userId = profile['id']?.toString();
-        _email = profile['email']?.toString();
+        _email = profile['email']?.toString();\n        _username = profile['username']?.toString();
       } catch (_) {
         await _api.clearToken();
         _token = null;
@@ -55,7 +55,7 @@ class AuthProvider extends ChangeNotifier {
     _token = value;
     final user = result['user'];
     _userId = result['id']?.toString() ?? (user is Map ? user['id']?.toString() : null);
-    _email = result['email']?.toString() ?? (user is Map ? user['email']?.toString() : null);
+    _email = result['email']?.toString() ?? (user is Map ? user['email']?.toString() : null);\n    _username = result['username']?.toString() ?? (user is Map ? user['username']?.toString() : null);
     await _api.saveToken(value);
     notifyListeners();
   }
