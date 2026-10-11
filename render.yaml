@@ -1,0 +1,29 @@
+databases:
+  - name: binspot-db
+    plan: free
+    databaseName: binspot
+    user: binspot
+
+services:
+  - type: web
+    name: binspot-api
+    runtime: python
+    plan: free
+    region: singapore
+    branch: refactor/django-backend-no-firebase
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: python manage.py migrate && python manage.py collectstatic --noinput && gunicorn binspot_backend.wsgi:application --bind 0.0.0.0:$PORT
+    healthCheckPath: /api/health/
+    autoDeploy: true
+    envVars:
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DJANGO_DEBUG
+        value: "false"
+      - key: DJANGO_ALLOWED_HOSTS
+        value: binspot-api.onrender.com
+      - key: DATABASE_URL
+        fromDatabase:
+          name: binspot-db
+          property: connectionString
