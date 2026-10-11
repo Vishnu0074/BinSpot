@@ -33,7 +33,14 @@ class _SignupScreenState extends State<SignupScreen> {
   Future<void> _signup() async {
     final username = _username.text.trim();
     final email = _email.text.trim();
-    if (username.length < 3 || username.length > 30 || !RegExp(r'^[A-Za-z0-9_-]+
+    if (username.length < 3 ||
+        username.length > 30 ||
+        !RegExp(r'^[A-Za-z0-9_-]+$').hasMatch(username)) {
+      setState(() => _error =
+          'Username must be 3–30 characters using letters, numbers, _ or -.');
+      return;
+    }
+    if (email.isEmpty || !email.contains('@')) {
       setState(() => _error = 'Enter a valid email address.');
       return;
     }
@@ -45,7 +52,10 @@ class _SignupScreenState extends State<SignupScreen> {
       setState(() => _error = "Passwords don't match.");
       return;
     }
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       await context.read<AuthProvider>().signup(username, email, _password.text);
       if (!mounted) return;
