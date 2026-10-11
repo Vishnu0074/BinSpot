@@ -13,38 +13,39 @@ class BinProvider extends ChangeNotifier {
   List<BinPoint> _allBins = [];
   LatLng? _currentLocation;
   String? _lastError;
-  Timer? _refreshTimer;
   bool _loading = false;
-  static const double _searchRadiusMeters = 5000;
+  bool _showMore = false;
+  static const double searchRadiusKm = 5;
+  static const int defaultLimit = 20;
+  static const int expandedLimit = 100;
 
   List<BinPoint> get bins => List.unmodifiable(_bins);
   List<BinPoint> get allBins => List.unmodifiable(_allBins);
   String? get lastError => _lastError;
   bool get loading => _loading;
+  bool get showingMore => _showMore;
+  LatLng? get currentLocation => _currentLocation;
 
-  BinProvider() {
-    refresh();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) => refresh());
-  }
-
-  @override
-  void dispose() {
-    _refreshTimer?.cancel();
-    super.dispose();
-  }
+  Future<void> initialize() => refresh();
 
   Future<void> refresh() async {
     if (_loading) return;
     _loading = true;
+    notifyListeners();
     try {
-      final response = await _api.get('/bins/');
+      final location = _currentLocation;
+      final query = location == null
+          ? ''
+          : '?lat=${location.latitude}&lng=${location.longitude}'
+              '&radius_km=$searchRadiusKm&limit=${_showMore ? expandedLimit : defaultLimit}';
+      final response = await _api.get('/bins/$query', authenticated: false);
       final list = response['results'] ?? response['data'] ?? [];
       if (list is List) {
         _allBins = list.whereType<Map>()
             .map((item) => BinPoint.fromMap(Map<String, dynamic>.from(item))).toList();
       }
+      _bins = List.of(_allBins);
       _lastError = null;
-      _filterBinsByLocation();
     } catch (error) {
       _lastError = error.toString();
     } finally {
@@ -54,35 +55,37 @@ class BinProvider extends ChangeNotifier {
   }
 
   void updateCurrentLocation(LatLng location) {
+    if (_currentLocation != null &&
+        LocationUtils.calculateDistance(_currentLocation!, location) < 25) return;
     _currentLocation = location;
-    _filterBinsByLocation();
-    notifyListeners();
+    refresh();
   }
 
-  void _filterBinsByLocation() {
-    if (_currentLocation == null) {
-      _bins = List.of(_allBins);
-      return;
-    }
-    final nearby = _allBins.where((bin) => LocationUtils.isWithinRadius(
-      _currentLocation!, LatLng(bin.lat, bin.lng), _searchRadiusMeters,
-    )).toList();
-    _bins = nearby.isNotEmpty ? nearby : List.of(_allBins);
+  Future<void> toggleExpandedNearby() async {
+    _showMore = !_showMore;
+    await refresh();
   }
 
-  Future<void> addBin({required double lat, required double lng,
-      required String addedBy, String type = 'bio'}) async {
+  Future<void> addBin({
+    required double lat,
+    required double lng,
+    required String addedBy,
+    String type = 'bio',
+    String accessLevel = 'public',
+    String description = '',
+  }) async {
     await _api.post('/bins/', body: {
       'latitude': lat,
       'longitude': lng,
-      'description': type,
+      'description': description,
       'type': type,
+      'access_level': accessLevel,
     });
     await refresh();
   }
 
   Future<void> upvote(String id) async {
-    await _api.post('/bins/$id/upvote/');
+    await _api.post('/bins/$id/upvote/', authenticated: false);
     await refresh();
   }
 
@@ -92,16 +95,11 @@ class BinProvider extends ChangeNotifier {
   }
 
   List<BinPoint> getNearbyBinsSorted() {
-    if (_currentLocation == null) return List.of(_allBins);
-    final sorted = List<BinPoint>.of(_allBins);
-    sorted.sort((a, b) => LocationUtils.calculateDistance(
-      _currentLocation!, LatLng(a.lat, a.lng),
-    ).compareTo(LocationUtils.calculateDistance(
-      _currentLocation!, LatLng(b.lat, b.lng),
-    )));
-    return sorted.where((bin) => LocationUtils.calculateDistance(
-      _currentLocation!, LatLng(bin.lat, bin.lng),
-    ) <= 10000).toList();
+    if (_currentLocation == null) return List.of(_bins);
+    final sorted = List<BinPoint>.of(_bins);
+    sorted.sort((a, b) => (getDistanceToBin(a) ?? double.infinity)
+        .compareTo(getDistanceToBin(b) ?? double.infinity));
+    return sorted;
   }
 
   double? getDistanceToBin(BinPoint bin) => _currentLocation == null
