@@ -30,21 +30,35 @@ class RegisterView(APIView):
     authentication_classes = []
 
     def post(self, request):
+        username = str(request.data.get("username", "")).strip()
         email = str(request.data.get("email", "")).strip().lower()
         password = str(request.data.get("password", ""))
+
+        if not username or len(username) < 3 or len(username) > 30:
+            raise ValidationError({"username": "Username must be between 3 and 30 characters."})
+        if not username.replace("_", "").replace("-", "").isalnum():
+            raise ValidationError({"username": "Use only letters, numbers, underscores, and hyphens."})
+        if User.objects.filter(username__iexact=username).exists():
+            raise ValidationError({"username": "This username is already taken."})
         if not email or "@" not in email:
             raise ValidationError({"email": "Enter a valid email address."})
+        if User.objects.filter(email__iexact=email).exists():
+            raise ValidationError({"email": "An account with this email already exists."})
         if len(password) < 8:
             raise ValidationError({"password": "Password must contain at least 8 characters."})
-        if User.objects.filter(username__iexact=email).exists() or User.objects.filter(email__iexact=email).exists():
-            raise ValidationError({"email": "An account with this email already exists."})
         try:
             validate_password(password)
         except DjangoValidationError as exc:
             raise ValidationError({"password": list(exc.messages)})
-        user = User.objects.create_user(username=email, email=email, password=password)
+
+        user = User.objects.create_user(username=username, email=email, password=password)
         token, _ = Token.objects.get_or_create(user=user)
-        return Response({"token": token.key, "id": user.pk, "email": user.email}, status=status.HTTP_201_CREATED)
+        return Response({
+            "token": token.key,
+            "id": user.pk,
+            "username": user.username,
+            "email": user.email,
+        }, status=status.HTTP_201_CREATED)
 
 
 class LoginView(ObtainAuthToken):
@@ -53,19 +67,28 @@ class LoginView(ObtainAuthToken):
 
     def post(self, request, *args, **kwargs):
         data = request.data.copy()
-        data["username"] = str(data.get("email", data.get("username", ""))).strip().lower()
+        data["username"] = str(data.get("username", "")).strip()
         serializer = self.serializer_class(data=data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         user = serializer.validated_data["user"]
         token, _ = Token.objects.get_or_create(user=user)
-        return Response({"token": token.key, "id": user.pk, "email": user.email})
+        return Response({
+            "token": token.key,
+            "id": user.pk,
+            "username": user.username,
+            "email": user.email,
+        })
 
 
 class CurrentUserView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        return Response({"id": request.user.pk, "email": request.user.email})
+        return Response({
+            "id": request.user.pk,
+            "username": request.user.username,
+            "email": request.user.email,
+        })
 
 
 class LogoutView(APIView):
@@ -191,7 +214,7 @@ class TopContributorsView(APIView):
             contributors.append({
                 "rank": rank,
                 "user_id": user.pk,
-                "display_name": (user.first_name or user.email.split("@")[0])[:40],
+                "display_name": user.username[:40],
                 "bins_count": count,
                 "title": title,
             })
