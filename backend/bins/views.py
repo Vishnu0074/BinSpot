@@ -30,7 +30,7 @@ class RegisterView(APIView):
     authentication_classes = []
 
     def post(self, request):
-        username = str(request.data.get("username", "")).strip()
+        username = str(request.data.get("username", "")).strip().lower()
         email = str(request.data.get("email", "")).strip().lower()
         password = str(request.data.get("password", ""))
 
@@ -195,7 +195,7 @@ class TopContributorsView(APIView):
     def get(self, request):
         users = User.objects.filter(submitted_bins__isnull=False).annotate(
             bins_count=Count("submitted_bins", distinct=True)
-        ).order_by("-bins_count", "email")[:10]
+        ).order_by("-bins_count", "username")[:10]
         contributors = []
         for rank, user in enumerate(users, start=1):
             count = user.bins_count
