@@ -1,36 +1,29 @@
 # BinSpot Django API
 
-The Django REST API lives in this directory and is the single source of truth for authentication and bin data. Firebase has been removed from the Flutter client.
+Django REST API for BinSpot. Firebase is not used.
 
 ## Local setup
-
 ```bash
 cd backend
 python -m venv .venv
-# Windows: .venv\Scripts\activate
+# Windows PowerShell: .venv\Scripts\Activate.ps1
 # macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
-copy .env.example .env  # Windows PowerShell; then edit if needed
-# macOS/Linux: cp .env.example .env
+cp .env.example .env
 python manage.py migrate
 python manage.py createsuperuser
 python manage.py runserver 0.0.0.0:8000
 ```
 
-Health check: `GET /api/health/`
-
-## API endpoints
-
-- `POST /api/auth/register/` with `email` and `password`
-- `POST /api/auth/login/` with `email` and `password`; returns a token
-- `GET /api/auth/me/` with `Authorization: Token <token>`
-- `POST /api/auth/logout/` with token
-- `GET /api/bins/` (public list)
-- `POST /api/bins/` (authenticated create)
-- `GET /api/bins/<id>/` (public details)
-- `PATCH /api/bins/<id>/` and `DELETE /api/bins/<id>/` (owner or admin only)
+## Endpoints
+- `GET /api/health/`
+- `POST /api/auth/register/`, `POST /api/auth/login/`, `GET /api/auth/me/`, `POST /api/auth/logout/`
+- `GET /api/bins/?lat=9.26&lng=76.77&radius_km=5&limit=20` returns the nearest 20 bins in a 5 km radius. Use `limit=100` to reveal more.
+- `POST /api/bins/` requires a token; fields include latitude, longitude, type, description and access_level (`public`, `limited`, `private`; default `public`).
+- `GET /api/bins/<id>/`, `PATCH /api/bins/<id>/`, `DELETE /api/bins/<id>/`
 - `POST /api/bins/<id>/upvote/`
+- `GET /api/contributors/top/` returns the top 10 contributors and nature-themed titles.
 
-The Flutter default points at `http://10.0.2.2:8000/api` for the Android emulator. Override it with `--dart-define=API_BASE_URL=https://your-host/api` for a hosted API. For a physical device, use the development computer's LAN IP; for production, use HTTPS.
-
-Before deploying, set `DJANGO_SECRET_KEY`, `DJANGO_DEBUG=false`, `DJANGO_ALLOWED_HOSTS`, and `DATABASE_URL` as environment variables. Never use the sample key in production. The old repository's committed SQLite database and Python bytecode were intentionally not copied. Migrations create a clean database; existing Firebase accounts and Firestore bins are not automatically migrated.
+## Render deployment
+Set root directory to `backend` in Render (or prefix commands with `cd backend &&`), build command `pip install -r requirements.txt`, and start command `python manage.py migrate && python manage.py collectstatic --noinput && gunicorn binspot_backend.wsgi:application --bind 0.0.0.0:$PORT`.
+Set `DJANGO_SECRET_KEY` to a strong secret, `DJANGO_DEBUG=false`, `DJANGO_ALLOWED_HOSTS` to the Render hostname, and `DATABASE_URL` to a persistent PostgreSQL database. Existing Firebase data is not migrated automatically.
