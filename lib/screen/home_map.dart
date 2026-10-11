@@ -139,7 +139,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
               initialCenter: _center,
               initialZoom: 14,
               onMapReady: () => _mapReady = true,
-              onLongPress: (_, __) => _toggleMore(),
+              onLongPress: (_, _) => _toggleMore(),
             ),
             children: [
               TileLayer(
@@ -306,7 +306,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: nearby.take(5).length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  separatorBuilder: (_, _) => const SizedBox(width: 8),
                   itemBuilder: (context, index) {
                     final bin = nearby[index];
                     return ActionChip(
