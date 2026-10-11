@@ -4,6 +4,8 @@ class BinPoint {
   final double lng;
   final String addedBy;
   final String type;
+  final String accessLevel;
+  final String description;
   final int upvotes;
   final DateTime createdAt;
 
@@ -13,32 +15,33 @@ class BinPoint {
     required this.lng,
     required this.addedBy,
     required this.type,
+    this.accessLevel = 'public',
+    this.description = '',
     required this.upvotes,
     required this.createdAt,
   });
 
+  bool get isRestricted => accessLevel == 'limited' || accessLevel == 'private';
+
   factory BinPoint.fromMap(Map<String, dynamic> data) {
     final latitude = data['latitude'] ?? data['lat'] ?? 0;
     final longitude = data['longitude'] ?? data['lng'] ?? 0;
-    final description = data['description']?.toString();
-    final type = data['type']?.toString() ?? description ?? 'bio';
     return BinPoint(
       id: data['id']?.toString() ?? '',
       lat: (latitude as num).toDouble(),
       lng: (longitude as num).toDouble(),
       addedBy: data['added_by_email']?.toString() ??
           data['added_by']?.toString() ??
-          data['addedBy']?.toString() ??
-          'community',
-      type: type,
+          data['addedBy']?.toString() ?? 'community',
+      type: data['type']?.toString() ?? 'bio',
+      accessLevel: data['access_level']?.toString() ?? 'public',
+      description: data['description']?.toString() ?? '',
       upvotes: (data['upvotes'] as num?)?.toInt() ?? 0,
       createdAt: DateTime.tryParse(
-            data['timestamp']?.toString() ??
-            data['created_at']?.toString() ??
-            data['createdAt']?.toString() ??
-            '',
-          ) ??
-          DateTime.now(),
+        data['created_at']?.toString() ??
+        data['timestamp']?.toString() ??
+        data['createdAt']?.toString() ?? '',
+      ) ?? DateTime.now(),
     );
   }
 }
