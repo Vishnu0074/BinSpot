@@ -82,7 +82,7 @@ class _AddBinScreenState extends State<AddBinScreen> {
             const Text('What can go here?', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(
-              value: _type,
+              initialValue: _type,
               decoration: const InputDecoration(
                 labelText: 'Bin type',
                 prefixIcon: Icon(Icons.recycling_rounded),
@@ -102,7 +102,7 @@ class _AddBinScreenState extends State<AddBinScreen> {
                 style: TextStyle(color: Color(0xFF607064))),
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(
-              value: _accessLevel,
+              initialValue: _accessLevel,
               decoration: const InputDecoration(
                 labelText: 'Access level',
                 prefixIcon: Icon(Icons.lock_open_rounded),
