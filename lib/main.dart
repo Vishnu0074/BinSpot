@@ -1,6 +1,7 @@
 import 'package:binspot_app/providers/auth_provider.dart';
 import 'package:binspot_app/providers/bin_provider.dart';
 import 'package:binspot_app/screen/home_map.dart';
+import 'package:binspot_app/screen/splash_screen.dart';
 import 'package:binspot_app/screen/login_screen.dart';
 import 'package:binspot_app/screen/signup_screen.dart';
 import 'package:flutter/material.dart';
@@ -55,7 +56,7 @@ class BinSpotApp extends StatelessWidget {
           ),
           useMaterial3: true,
         ),
-        home: LoginScreen(),
+        home: const SplashScreen(),
         routes: {
           SignupScreen.routeName: (_) => SignupScreen(),
           LoginScreen.routeName: (_) => LoginScreen(),
