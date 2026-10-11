@@ -1,4 +1,5 @@
 from rest_framework import serializers
+
 from .models import Bin
 
 
@@ -8,7 +9,7 @@ class BinSerializer(serializers.ModelSerializer):
     class Meta:
         model = Bin
         fields = [
-            "id", "latitude", "longitude", "description", "type",
+            "id", "latitude", "longitude", "description", "type", "access_level",
             "added_by", "added_by_email", "upvotes", "created_at",
         ]
         read_only_fields = ["id", "added_by", "added_by_email", "upvotes", "created_at"]
