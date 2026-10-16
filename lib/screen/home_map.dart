@@ -30,6 +30,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   LatLng? _currentLocation;
   StreamSubscription<Position>? _positionStream;
   bool _mapReady = false;
+  double _mapZoom = 14;
 
   @override
   void initState() {
@@ -139,7 +140,12 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
               initialCenter: _center,
               initialZoom: 14,
               onMapReady: () => _mapReady = true,
-              onLongPress: (_, __) => _toggleMore(),
+              onPositionChanged: (camera, hasGesture) {
+                if (_mapZoom != camera.zoom) {
+                  setState(() => _mapZoom = camera.zoom);
+                }
+              },
+              onLongPress: (_, _) => _toggleMore(),
             ),
             children: [
               TileLayer(
@@ -172,16 +178,30 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                       ),
                     ),
                   ),
-                ...bins.map((bin) => Marker(
-                  point: LatLng(bin.lat, bin.lng),
-                  width: 44,
-                  height: 48,
-                  alignment: Alignment.bottomCenter,
-                  child: GestureDetector(
-                    onTap: () => _showBinDetails(bin),
-                    child: Icon(Icons.location_pin, size: 44, color: _binColor(bin)),
-                  ),
-                )),
+                ...bins.map((bin) {
+                  // Keep the marker's tip anchored to the exact coordinate.
+                  // Shrink markers as the map zooms out to reduce overlap and
+                  // avoid making nearby pins look like they are in the wrong place.
+                  final markerSize = (_mapZoom * 2.4).clamp(20.0, 40.0);
+                  return Marker(
+                    point: LatLng(bin.lat, bin.lng),
+                    width: markerSize,
+                    height: markerSize + 4,
+                    alignment: Alignment.bottomCenter,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => _showBinDetails(bin),
+                      child: Align(
+                        alignment: Alignment.bottomCenter,
+                        child: Icon(
+                          Icons.location_pin,
+                          size: markerSize,
+                          color: _binColor(bin),
+                        ),
+                      ),
+                    ),
+                  );
+                }),
               ]),
             ],
           ),
@@ -306,7 +326,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: nearby.take(5).length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  separatorBuilder: (_, _) => const SizedBox(width: 8),
                   itemBuilder: (context, index) {
                     final bin = nearby[index];
                     return ActionChip(

@@ -56,7 +56,9 @@ class BinProvider extends ChangeNotifier {
 
   void updateCurrentLocation(LatLng location) {
     if (_currentLocation != null &&
-        LocationUtils.calculateDistance(_currentLocation!, location) < 25) return;
+        LocationUtils.calculateDistance(_currentLocation!, location) < 25) {
+      return;
+    }
     _currentLocation = location;
     refresh();
   }
