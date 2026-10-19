@@ -30,6 +30,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   LatLng? _currentLocation;
   StreamSubscription<Position>? _positionStream;
   bool _mapReady = false;
+  bool _showChrome = false;
   double _mapZoom = 14;
 
   @override
@@ -41,6 +42,9 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       _center = savedLocation;
     }
     _watchLocation();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() => _showChrome = true);
+    });
   }
 
   void _watchLocation() {
@@ -131,7 +135,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     final provider = context.watch<BinProvider>();
     final bins = provider.bins;
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7F1),
+      backgroundColor: const Color(0xFFF7F9F6),
       body: Stack(
         children: [
           FlutterMap(
@@ -193,10 +197,15 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                       onTap: () => _showBinDetails(bin),
                       child: Align(
                         alignment: Alignment.bottomCenter,
-                        child: Icon(
-                          Icons.location_pin,
-                          size: markerSize,
-                          color: _binColor(bin),
+                        child: AnimatedScale(
+                          scale: _showChrome ? 1 : 0.72,
+                          duration: const Duration(milliseconds: 260),
+                          curve: Curves.easeOutBack,
+                          child: Icon(
+                            Icons.location_pin,
+                            size: markerSize,
+                            color: _binColor(bin),
+                          ),
                         ),
                       ),
                     ),
@@ -205,10 +214,18 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
               ]),
             ],
           ),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-              child: Column(
+          AnimatedOpacity(
+            opacity: _showChrome ? 1 : 0,
+            duration: const Duration(milliseconds: 320),
+            curve: Curves.easeOutCubic,
+            child: AnimatedSlide(
+              offset: _showChrome ? Offset.zero : const Offset(0, 0.035),
+              duration: const Duration(milliseconds: 420),
+              curve: Curves.easeOutCubic,
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                  child: Column(
                 children: [
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
@@ -274,10 +291,12 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                     ]),
                   ),
                   const SizedBox(height: 12),
-                  _buildNearbyCard(provider),
-                ],
+                    _buildNearbyCard(provider),
+                  ],
+                ),
               ),
             ),
+          ),
           ),
           if (provider.loading)
             const Positioned(top: 150, right: 18, child: SizedBox(
@@ -300,7 +319,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(24),
-      elevation: 6,
+      elevation: 3,
+      shadowColor: const Color(0x1F17452A),
       child: InkWell(
         borderRadius: BorderRadius.circular(24),
         onTap: () => _showNearbyList(provider),
